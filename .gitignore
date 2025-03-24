@@ -1,0 +1,6 @@
+*.exe
+*.png
+counters_csv/*
+__pycache__/*
+duos_csv/*
+*.jpg
