@@ -1,5 +1,5 @@
 import pandas as pd
-import json
+import json,os,sys
 
 CHAMP_DATA = None
 
@@ -11,15 +11,24 @@ def get_champ_type(champion: str) -> str:
     champ_type = CHAMP_DATA[CHAMP_DATA["Champion"].str.lower() == champion.lower()]
     return champ_type["AD/AP"].values[0] if not champ_type.empty else ""
 
+def get_file_path(relative_path):
+    """Renvoie le chemin correct du fichier en fonction du mode (script ou .exe)."""
+    if getattr(sys, 'frozen', False):  # Mode exécutable PyInstaller
+        base_path = sys._MEIPASS
+    else:  # Mode script Python normal
+        base_path = os.path.dirname(os.path.abspath(__file__))
+
+    return os.path.join(base_path, relative_path)
+
 def load_data():
     global CHAMP_DATA
-    with open("data/champions.json", "r", encoding="utf-8") as f:
+    with open(get_file_path("data/champions.json"), "r", encoding="utf-8") as f:
         champions = json.load(f)
-    with open("data/counters.json", "r", encoding="utf-8") as f:
+    with open(get_file_path("data/counters.json"), "r", encoding="utf-8") as f:
         counters = json.load(f)
-    with open("data/synergy.json", "r", encoding="utf-8") as f:
+    with open(get_file_path("data/synergy.json"), "r", encoding="utf-8") as f:
         synergies = json.load(f)
-    CHAMP_DATA = pd.read_excel("data/champ_role.xlsx")
+    CHAMP_DATA = pd.read_excel(get_file_path("data/champ_role.xlsx"))
 
     return champions, counters, synergies
 

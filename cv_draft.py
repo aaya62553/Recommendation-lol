@@ -347,7 +347,6 @@ class DraftApp:
         enemy_draft = [champion_ids.get(player["championId"], "") for player in their_team if player["championId"] != 0]
         all_bans = my_team_bans + their_team_bans
         next_role = self.get_next_picker(data)
-        print(all_bans)
         recommendations = recommendations_champ(ally_draft, enemy_draft, all_bans, next_role)
         if next_role:
             self.recommendations_label.config(text=f"Prochain picker ({next_role}) : {', '.join(recommendations)}")
