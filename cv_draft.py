@@ -1,13 +1,16 @@
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 from lcu_driver import Connector
 import requests
 import asyncio
 from PIL import Image, ImageTk
 from io import BytesIO
 import threading
+import os
 
 from recommendations import recommendations_champ
+from api_utils import load_champion_ids
+
 ROLE_MAPPING = {
     "top": "Top",
     "jungle": "Jungle",
@@ -16,11 +19,6 @@ ROLE_MAPPING = {
     "utility": "Support"  
         }
 # Charger les noms des champions depuis Data Dragon
-def load_champion_ids():
-    url = "https://ddragon.leagueoflegends.com/cdn/14.6.1/data/en_US/champion.json"
-    response = requests.get(url)
-    champion_data = response.json()["data"]
-    return {int(champ["key"]): champ["id"] for champ in champion_data.values()}
 
 champion_ids = load_champion_ids()
 
@@ -35,7 +33,7 @@ def load_champion_image(champion_name):
         return ImageTk.PhotoImage(img)
     
     try:
-        url = f"https://ddragon.leagueoflegends.com/cdn/14.6.1/img/champion/{champion_name}.png"
+        url = f"https://ddragon.leagueoflegends.com/cdn/15.6.1/img/champion/{champion_name}.png"
         response = requests.get(url)
         img = Image.open(BytesIO(response.content))
         img = img.resize((60, 60), Image.Resampling.LANCZOS)
@@ -59,6 +57,7 @@ class DraftApp:
             "accent_red_light": "#c70039",  # Lighter red for highlights
             "neutral": "#2c394b",  # Neutral color for general elements
             "ban_bg": "#440a67",  # Purple color for ban sections
+            "input_bg": "#1f305e",  # Color for input fields
         }
 
         self.root = root
@@ -76,6 +75,31 @@ class DraftApp:
         # Conteneur principal avec deux colonnes
         self.main_frame = tk.Frame(root, bg=self.colors["bg_main"], bd=2)
         self.main_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        
+        # Section summoner name en haut
+        self.summoner_frame = tk.Frame(self.main_frame, bg=self.colors["bg_main"])
+        self.summoner_frame.pack(fill="x", pady=(0, 10))
+        
+        tk.Label(self.summoner_frame, text="Summoner Name:", bg=self.colors["bg_main"], 
+                fg=self.colors["text_light"], font=("Arial", 12,"bold")).pack(side=tk.LEFT, padx=(0, 5))
+        
+        # Load saved summoner name if exists
+        self.summoner_name = self.load_summoner_name()
+        
+        # Create entry for summoner name with tag
+        self.summoner_var = tk.StringVar(value=self.summoner_name)
+        self.summoner_entry = tk.Entry(self.summoner_frame, textvariable=self.summoner_var, 
+                                      width=30, bg=self.colors["input_bg"], fg=self.colors["text_light"],
+                                      insertbackground=self.colors["text_light"])
+        self.summoner_entry.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # Save button
+        self.save_button = tk.Button(self.summoner_frame, text="Save", command=self.save_summoner_name,
+                                    bg=self.colors["accent_blue_light"], fg=self.colors["text_light"],
+                                    activebackground=self.colors["accent_blue"], 
+                                    activeforeground=self.colors["text_light"],
+                                    font=("Arial", 12, "bold"))
+        self.save_button.pack(side=tk.LEFT)
         
         # Section des bans en haut
         self.bans_frame = tk.LabelFrame(self.main_frame, text="Bans", 
@@ -212,6 +236,28 @@ class DraftApp:
 
         threading.Thread(target=self.connector.start, daemon=True).start()  # Lancer LCU dans un thread séparé
 
+    def load_summoner_name(self):
+        """Load the saved summoner name from a file"""
+        file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "summoner_name.txt")
+        try:
+            if os.path.exists(file_path):
+                with open(file_path, "r") as file:
+                    return file.read().strip()
+        except Exception as e:
+            print(f"Error loading summoner name: {e}")
+        return ""
+
+    def save_summoner_name(self):
+        """Save the summoner name to a file"""
+        summoner_name = self.summoner_var.get().strip()
+        file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "summoner_name.txt")
+        try:
+            with open(file_path, "w") as file:
+                file.write(summoner_name)
+            messagebox.showinfo("Success", "Summoner name saved successfully!")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save summoner name: {e}")
+
     def get_next_picker(self, data):
 
         actions = data.get("actions", [])
@@ -347,7 +393,11 @@ class DraftApp:
         enemy_draft = [champion_ids.get(player["championId"], "") for player in their_team if player["championId"] != 0]
         all_bans = my_team_bans + their_team_bans
         next_role = self.get_next_picker(data)
-        recommendations = recommendations_champ(ally_draft, enemy_draft, all_bans, next_role)
+        
+        # Use the current summoner name for recommendations
+        summoner_name = self.summoner_var.get().strip()
+        recommendations = recommendations_champ(ally_draft, enemy_draft, all_bans, next_role, summoner_name if summoner_name else None)
+        
         if next_role:
             self.recommendations_label.config(text=f"Prochain picker ({next_role}) : {', '.join(recommendations)}")
         else:

@@ -3,3 +3,6 @@ counters_csv/*
 __pycache__/*
 duos_csv/*
 *.jpg
+.env
+chromedriver.exe
+*.spec

@@ -1,5 +1,7 @@
 import pandas as pd
 import json,os,sys
+import requests
+from api_utils import get_champ_masteries,load_champion_ids
 
 CHAMP_DATA = None
 
@@ -22,8 +24,10 @@ def get_file_path(relative_path):
 
 def load_data():
     global CHAMP_DATA
-    with open(get_file_path("data/champions.json"), "r", encoding="utf-8") as f:
-        champions = json.load(f)
+    url_champ="https://ddragon.leagueoflegends.com/cdn/15.6.1/data/en_US/champion.json"
+    response = requests.get(url_champ)
+    if response.status_code == 200:
+        champions = response.json()
     with open(get_file_path("data/counters.json"), "r", encoding="utf-8") as f:
         counters = json.load(f)
     with open(get_file_path("data/synergy.json"), "r", encoding="utf-8") as f:
@@ -32,7 +36,7 @@ def load_data():
 
     return champions, counters, synergies
 
-def calculate_score(champ, enemy_draft, counters, ally_draft, synergies):
+def calculate_score(champ, enemy_draft, counters, ally_draft, synergies, summoner_name=None):
     score = 0
     # Pour chaque counter
     for counter in counters.get(champ, []):
@@ -66,15 +70,22 @@ def calculate_score(champ, enemy_draft, counters, ally_draft, synergies):
                 score -= 5
             elif get_champ_type(champ) == "AD":
                 score += 5
+    if summoner_name:
+        masteries = get_champ_masteries(summoner_name)
+        if masteries:
+            mastery_score = masteries.get(champ, "")
+            if mastery_score >5:
+                score += 0.5*mastery_score
 
     return score
 
-def recommendations_champ(ally_draft, enemy_draft,bans ,next_role=None):
+def recommendations_champ(ally_draft, enemy_draft, bans, next_role=None, summoner_name=None):
     """
     ally_draft: liste ou dict des champions alliés déjà sélectionnés
     enemy_draft: liste des champions ennemis déjà sélectionnés
     bans: liste des champions bannis
     next_role: rôle à prédire (ex: "Support")
+    summoner_name: nom du joueur (optionnel) pour prendre en compte sa maîtrise des champions
     """
     champions_data, counters, synergies = load_data()
     # Liste des champions déjà pris
@@ -85,7 +96,7 @@ def recommendations_champ(ally_draft, enemy_draft,bans ,next_role=None):
     
     # Calcul des scores pour chaque champion
     for champ in champion_scores.keys():
-        champion_scores[champ] = calculate_score(champ, enemy_draft, counters, ally_draft, synergies)
+        champion_scores[champ] = calculate_score(champ, enemy_draft, counters, ally_draft, synergies, summoner_name)
     
     # Filtrage par rôle si spécifié
     if next_role:
@@ -93,7 +104,7 @@ def recommendations_champ(ally_draft, enemy_draft,bans ,next_role=None):
         champion_scores = {champ: champion_scores[champ] for champ in role_filtered}
     else : 
         roles_taken = [role for role in ally_draft.keys() if ally_draft[role] in ["Top", "Jungle", "Middle", "Bottom", "Support"]]
-        if len(roles_taken) >0:
+        if len(roles_taken) > 0:
             role_filtered = [champ for champ in champion_scores.keys() if any(role in get_champ_role(champ) for role in roles_taken)]
             champion_scores = {champ: champion_scores[champ] for champ in role_filtered}
     
@@ -103,5 +114,5 @@ def recommendations_champ(ally_draft, enemy_draft,bans ,next_role=None):
     return sorted_champions[:5]
 
 # Exemple d'utilisation
-# champ_recom = recommendations_champ({"Top":"Nasus", "Bottom":"Jinx"}, ["Zed", "Bard"], next_role="Jungle")
+# champ_recom = recommendations_champ({"Top":"Nasus", "Bottom":"Jinx"}, ["Zed", "Bard"],[], next_role="Jungle")
 # print(champ_recom)
